@@ -9,9 +9,9 @@ on:
 env:
   # ${{ env.VERSION }} is used by release scripts
   VERSION: ${{ github.event.inputs.name || github.ref_name }}
-  QTPROJECT_NAME: ''
+  QTPROJECT_NAME: 'ColorPicker'
   EXECUTABLE_NAME: ${{ env.QTPROJECT_NAME }}
-  UBUNTU_APT_ADDITIONAL: '${{ env.UBUNTU_APT_ADDITIONAL }}'
+  UBUNTU_APT_ADDITIONAL: ''
 
 jobs:
   build-windows-x86_64:
