@@ -10,7 +10,7 @@ env:
   # ${{ env.VERSION }} is used by release scripts
   VERSION: ${{ github.event.inputs.name || github.ref_name }}
   QTPROJECT_NAME: 'ColorPicker'
-  EXECUTABLE_NAME: ${{ env.QTPROJECT_NAME }}
+  EXECUTABLE_NAME: 'ColorPicker'
   UBUNTU_APT_ADDITIONAL: ''
 
 jobs:
