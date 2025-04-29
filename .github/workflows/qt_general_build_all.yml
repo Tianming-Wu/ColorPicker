@@ -1,0 +1,199 @@
+name: Build and Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Version name (default is ref name)'
+
+env:
+  # ${{ env.VERSION }} is used by release scripts
+  VERSION: ${{ github.event.inputs.name || github.ref_name }}
+  QTPROJECT_NAME: ''
+  EXECUTABLE_NAME: ${{ env.QTPROJECT_NAME }}
+  UBUNTU_APT_ADDITIONAL: '${{ env.UBUNTU_APT_ADDITIONAL }}'
+
+jobs:
+  build-windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.2.4'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          modules: qtmultimedia
+          cache: true
+          aqtversion: "==3.2.*"
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release
+        shell: cmd
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config=Release
+        shell: cmd
+
+      - name: Deploy Dependencies
+        run: |
+          cd build/Release
+          ls
+          windeployqt ${{ env.EXECUTABLE_NAME }}.exe
+        shell: pwsh
+
+      - name: Package
+        run: |
+          cd build/Release
+          powershell Compress-Archive -Path * -DestinationPath ../../${{ env.QTPROJECT_NAME }}-Windows-${{ env.VERSION }}-x86_64.zip
+        shell: pwsh
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-Windows-x86_64
+          path: ${{ env.QTPROJECT_NAME }}-Windows-${{ env.VERSION }}-x86_64.zip
+
+
+  build-ubuntu-x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check architecture
+        run: |
+            arch=$(uname -m)
+            if [[ "$arch" != x86_64 ]]
+            then
+                echo "Unexpected architecture: $arch" >&2
+                exit 1
+            fi
+    
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake clang \
+          qt6-base-dev qt6-wayland-dev qt6-tools-dev qt6-tools-dev-tools libxkbcommon-dev ${{ env.UBUNTU_APT_ADDITIONAL }} --fix-missing || true
+        shell: bash
+        
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config=Release
+        shell: bash
+          
+      - name: Package
+        run: |
+          mkdir -p release
+          cd build
+          zip -r ../release/${{ env.QTPROJECT_NAME }}-Ubuntu-${{ env.VERSION }}-x86_64.zip ${{ env.EXECUTABLE_NAME }}
+        shell: bash
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-Ubuntu-x86_64
+          path: release/${{ env.QTPROJECT_NAME }}-Ubuntu-${{ env.VERSION }}-x86_64.zip
+
+
+  build-ubuntu-aarch64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check architecture
+        run: |
+            arch=$(uname -m)
+            if [[ "$arch" != aarch64 ]]
+            then
+                echo "Unexpected architecture: $arch" >&2
+                exit 1
+            fi
+    
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake clang \
+          qt6-base-dev qt6-wayland-dev qt6-tools-dev qt6-tools-dev-tools libxkbcommon-dev ${{ env.UBUNTU_APT_ADDITIONAL }} --fix-missing || true
+        shell: bash
+        
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config=Release
+        shell: bash
+          
+      - name: Package
+        run: |
+          mkdir -p release
+          cd build
+          zip -r ../release/${{ env.QTPROJECT_NAME }}-Ubuntu-${{ env.VERSION }}-aarch64.zip ${{ env.EXECUTABLE_NAME }}
+        shell: bash
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-Ubuntu-aarch64
+          path: release/${{ env.QTPROJECT_NAME }}-Ubuntu-${{ env.VERSION }}-aarch64.zip
+
+
+  release:
+    needs:
+      - build-windows-x86_64
+      - build-ubuntu-x86_64
+      - build-ubuntu-aarch64
+    runs-on: Ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Directory Init
+        run: |
+          mkdir release
+          mkdir release/releases
+      
+      - name: Download Windows x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-Windows-x86_64
+          path: release/releases/
+          
+      - name: Download Ubuntu x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-Ubuntu-x86_64
+          path: release/releases/
+          
+      - name: Download Ubuntu aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-Ubuntu-aarch64
+          path: release/releases/
+          
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.QTPROJECT_NAME }}-all-release-${{ env.VERSION }}
+          path: release/releases
